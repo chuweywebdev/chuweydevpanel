@@ -162,7 +162,7 @@ server.on('error', (err) => {
   process.exit(1);
 });
 
-server.listen(PORT, () => {
+server.listen(PORT, '127.0.0.1', () => {
   console.log('ChuweyDevPanel server running on http://localhost:' + PORT);
   if (typeof process.send === 'function') {
     process.send({ type: 'ready', port: PORT });

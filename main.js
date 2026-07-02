@@ -1,4 +1,4 @@
-const { app, BrowserWindow } = require('electron');
+const { app, BrowserWindow, ipcMain } = require('electron');
 const { fork } = require('child_process');
 const path = require('path');
 const fs = require('fs');
@@ -167,6 +167,12 @@ function createWindow() {
 
   mainWindow.on('closed', () => { mainWindow = null; });
 }
+
+/* ─── IPC Handlers ─────────────────────────────────────────────────────── */
+
+ipcMain.handle('get-version', () => {
+  return app.getVersion();
+});
 
 /* ─── App Lifecycle ──────────────────────────────────────────────────── */
 

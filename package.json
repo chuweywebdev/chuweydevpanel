@@ -1,10 +1,10 @@
 {
   "name": "chuweydevpanel",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "private": true,
   "description": "ChuweyDevPanel - SSH server manager and command runner",
   "main": "main.js",
-    "publisher": "ChuweyDev",
+  "publisher": "ChuweyDev",
   "author": {
     "name": "ChuweyDev",
     "url": "https://www.facebook.com/chuweywebdev"
@@ -29,12 +29,14 @@
       "public/**/*",
       "package.json"
     ],
+    "asar": true,
     "asarUnpack": [
       "server.js",
       "preload.js",
       "public/**"
     ],
     "npmRebuild": false,
+    "compression": "maximum",
     "win": {
       "target": "nsis",
       "icon": "public/icon.ico"
