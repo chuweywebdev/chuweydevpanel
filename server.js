@@ -152,7 +152,16 @@ wss.on('connection', (ws, req) => {
 
 /* ─── Start Server ────────────────────────────────────────────────────── */
 
-const PORT = process.env.PORT || 1000;
+const PORT = parseInt(process.env.PORT, 10) || 1000;
+
+server.on('error', (err) => {
+  console.error('Server error:', err.message);
+  if (err.code === 'EADDRINUSE') {
+    console.error('Port ' + PORT + ' is already in use. Close the other program or change the port.');
+  }
+  process.exit(1);
+});
+
 server.listen(PORT, () => {
   console.log('ChuweyDevPanel server running on http://localhost:' + PORT);
   if (typeof process.send === 'function') {

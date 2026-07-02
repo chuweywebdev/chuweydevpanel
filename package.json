@@ -4,6 +4,7 @@
   "private": true,
   "description": "ChuweyDevPanel - SSH server manager and command runner",
   "main": "main.js",
+    "publisher": "ChuweyDev",
   "author": {
     "name": "ChuweyDev",
     "url": "https://www.facebook.com/chuweywebdev"
@@ -30,6 +31,7 @@
     ],
     "asarUnpack": [
       "server.js",
+      "preload.js",
       "public/**"
     ],
     "npmRebuild": false,

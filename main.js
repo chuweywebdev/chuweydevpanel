@@ -1,36 +1,38 @@
 const { app, BrowserWindow } = require('electron');
 const { fork } = require('child_process');
 const path = require('path');
+const fs = require('fs');
 const waitOn = require('wait-on');
 
 const PORT = 1000;
 const SERVER_URL = `http://localhost:${PORT}`;
+const LOG_FILE = path.join(app.getPath('userData'), 'devpanel.log');
 
 let mainWindow = null;
 let serverProcess = null;
 
+function log(msg) {
+  const line = `[${new Date().toISOString()}] ${msg}`;
+  console.log(line);
+  try { fs.appendFileSync(LOG_FILE, line + '\n'); } catch {}
+}
+
 /*
  * Path helpers resolve correctly in both development and packaged modes.
- * In a packaged app, server.js and public/ are unpacked from the asar archive
- * because fork() — a raw Node.js process — cannot read inside an Electron asar.
+ * In a packaged app, forked child processes and preload scripts need to be
+ * outside the asar archive (asarUnpack in package.json).
  */
-function serverScriptPath() {
+function unpackedPath(sub) {
   if (app.isPackaged) {
-    return path.join(process.resourcesPath, 'app.asar.unpacked', 'server.js');
+    return path.join(process.resourcesPath, 'app.asar.unpacked', sub);
   }
-  return path.join(__dirname, 'server.js');
+  return path.join(__dirname, sub);
 }
 
-function publicDirPath() {
-  if (app.isPackaged) {
-    return path.join(process.resourcesPath, 'app.asar.unpacked', 'public');
-  }
-  return path.join(__dirname, 'public');
-}
-
-function iconPath() {
-  return path.join(publicDirPath(), 'icon.png');
-}
+function serverScriptPath() { return unpackedPath('server.js'); }
+function preloadScriptPath() { return unpackedPath('preload.js'); }
+function publicDirPath() { return unpackedPath('public'); }
+function iconPath() { return path.join(publicDirPath(), 'icon.png'); }
 
 /*
  * Spawn the Express server as a forked child process.
@@ -54,6 +56,7 @@ function startServer() {
     serverProcess.on('error', reject);
 
     serverProcess.on('exit', (code) => {
+      log('Server process exited with code ' + code);
       if (mainWindow && !mainWindow.isDestroyed()) {
         mainWindow.loadURL(
           'data:text/html,' + encodeURIComponent(
@@ -62,13 +65,13 @@ function startServer() {
             'The backend server exited unexpectedly (code: ' + code + ').<br>' +
             'Please restart the application.</p>'
           )
-        );
+        ).catch(() => {});
       }
     });
 
-    waitOn({ resources: [SERVER_URL], timeout: 20000 })
+    waitOn({ resources: [SERVER_URL], timeout: 30000 })
       .then(() => resolve())
-      .catch(() => reject(new Error('Server did not respond within 20 s')));
+      .catch(() => reject(new Error('Server did not respond within 30 s')));
   });
 }
 
@@ -94,13 +97,28 @@ function createWindow() {
       sandbox: true,
       webSecurity: true,
       allowRunningInsecureContent: false,
-      preload: path.join(__dirname, 'preload.js')
+      preload: preloadScriptPath()
     }
   });
 
-  mainWindow.loadURL(SERVER_URL);
+  mainWindow.loadURL(SERVER_URL).catch(err => log('loadURL error: ' + err.message));
 
-  mainWindow.once('ready-to-show', () => mainWindow.show());
+  /*
+   * Show the window when the page is ready.  If the page never signals ready
+   * (e.g. a slow load, a blank page, a CSP error), force-show after 10 s
+   * so the user always sees something rather than a silent failure.
+   */
+  const readyFallback = setTimeout(() => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      log('ready-to-show fallback triggered');
+      mainWindow.show();
+    }
+  }, 10000);
+
+  mainWindow.once('ready-to-show', () => {
+    clearTimeout(readyFallback);
+    mainWindow.show();
+  });
 
   /*
    * Prevent navigation away from the local server
@@ -154,10 +172,16 @@ function createWindow() {
 
 app.whenReady().then(async () => {
   try {
+    log('Starting ChuweyDevPanel (packaged=' + app.isPackaged + ')');
+    log('Server script: ' + serverScriptPath());
+    log('Public dir: ' + publicDirPath());
+    log('Preload script: ' + preloadScriptPath());
+    log('Log file: ' + LOG_FILE);
+
     await startServer();
     createWindow();
   } catch (err) {
-    console.error('Failed to start:', err.message);
+    log('Failed to start: ' + err.message);
     app.quit();
   }
 });
