@@ -41,14 +41,23 @@ function iconPath() { return path.join(publicDirPath(), 'icon.png'); }
  */
 function startServer() {
   return new Promise((resolve, reject) => {
-    serverProcess = fork(serverScriptPath(), [], {
-      stdio: ['pipe', 'pipe', 'pipe', 'ipc'],
-      env: {
-        ...process.env,
-        PORT: String(PORT),
-        PUBLIC_PATH: publicDirPath()
-      }
-    });
+    const forkEnv = {
+    ...process.env,
+    PORT: String(PORT),
+    PUBLIC_PATH: publicDirPath()
+  };
+
+  if (app.isPackaged) {
+    const asarModules = path.join(process.resourcesPath, 'app.asar', 'node_modules');
+    forkEnv.NODE_PATH = forkEnv.NODE_PATH
+      ? [asarModules, forkEnv.NODE_PATH].join(path.delimiter)
+      : asarModules;
+  }
+
+  serverProcess = fork(serverScriptPath(), [], {
+    stdio: ['pipe', 'pipe', 'pipe', 'ipc'],
+    env: forkEnv
+  });
 
     serverProcess.stdout.on('data', (d) => process.stdout.write('[server] ' + d));
     serverProcess.stderr.on('data', (d) => process.stderr.write('[server] ' + d));
