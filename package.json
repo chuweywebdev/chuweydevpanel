@@ -1,0 +1,65 @@
+{
+  "name": "chuweydevpanel",
+  "version": "1.0.0",
+  "private": true,
+  "description": "ChuweyDevPanel - SSH server manager and command runner",
+  "main": "main.js",
+  "author": {
+    "name": "ChuweyDev",
+    "url": "https://www.facebook.com/chuweywebdev"
+  },
+  "scripts": {
+    "start": "electron .",
+    "dev": "cross-env NODE_ENV=development electron .",
+    "build": "electron-builder",
+    "pack": "electron-builder --dir",
+    "server": "node server.js"
+  },
+  "build": {
+    "appId": "com.chuwey.devpanel",
+    "productName": "ChuweyDevPanel",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "server.js",
+      "preload.js",
+      "public/**/*",
+      "package.json"
+    ],
+    "asarUnpack": [
+      "server.js",
+      "public/**"
+    ],
+    "npmRebuild": false,
+    "win": {
+      "target": "nsis",
+      "icon": "public/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "installerIcon": "public/icon.ico",
+      "uninstallerIcon": "public/icon.ico",
+      "installerHeaderIcon": "public/icon.ico"
+    }
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.21.0",
+    "ssh2": "^1.16.0",
+    "wait-on": "^8.0.0",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "cross-env": "^7.0.3",
+    "electron": "^34.0.0",
+    "electron-builder": "^25.1.0"
+  },
+  "allowScripts": {
+    "electron@34.0.0": true
+  }
+}

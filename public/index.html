@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ChuweyDevPanel</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div id="app">
+    <header id="topbar">
+      <button id="menu-toggle" class="topbar-btn" title="Toggle sidebar" aria-label="Toggle sidebar">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+      </button>
+      <h2 id="page-title">Servers</h2>
+      <div class="topbar-spacer"></div>
+      <button id="tour-btn" class="topbar-btn" title="Tour Guide" aria-label="Tour Guide">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+      </button>
+    </header>
+
+    <div id="master-panel">
+      <aside id="sidebar" role="navigation" aria-label="Main navigation">
+        <div class="sidebar-header">
+          <div class="sidebar-logo">
+            <svg width="28" height="28" viewBox="0 0 28 28" fill="none" aria-hidden="true">
+              <rect width="28" height="28" rx="6" fill="var(--accent)"/>
+              <path d="M8 10h12M8 14h8M8 18h10" stroke="#fff" stroke-width="2" stroke-linecap="round"/>
+            </svg>
+            <span class="sidebar-title">ChuweyDevPanel</span>
+          </div>
+        </div>
+        <nav class="sidebar-nav">
+          <a href="#servers" class="nav-item active" data-route="servers" aria-label="Servers">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"/><rect x="2" y="14" width="20" height="8" rx="2" ry="2"/><circle cx="6" cy="6" r="1"/><circle cx="6" cy="18" r="1"/></svg>
+            <span>Servers</span>
+          </a>
+
+          <a href="#dashboard" class="nav-item" data-route="dashboard" aria-label="Dashboard">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+            <span>Dashboard</span>
+          </a>
+          <a href="#snippets" class="nav-item" data-route="snippets" aria-label="Snippets">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+            <span>Snippets</span>
+          </a>
+          <a href="#settings" class="nav-item" data-route="settings" aria-label="Settings">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+            <span>Settings</span>
+          </a>
+        </nav>
+        <div class="sidebar-footer">
+          <div class="sidebar-stats" id="sidebar-stats">
+            <span id="stat-servers"></span>
+            <span id="stat-snippets"></span>
+          </div>
+        </div>
+      </aside>
+      <div id="sidebar-backdrop" class="sidebar-backdrop"></div>
+
+      <main id="main">
+        <div id="content" class="page-enter"></div>
+        <footer id="app-footer">
+          <span>Developed by <a href="https://www.facebook.com/chuweywebdev" target="_blank" rel="noopener noreferrer">ChuweyDev</a></span>
+        </footer>
+      </main>
+    </div>
+  </div>
+
+  <div id="tour-overlay" class="overlay" role="dialog" aria-label="Tour Guide">
+    <div class="tour-panel">
+      <div id="tour-body"></div>
+      <div class="tour-footer">
+        <span id="tour-counter" class="tour-counter"></span>
+        <div class="tour-footer-actions">
+          <button class="btn btn-ghost" id="tour-prev" disabled>Previous</button>
+          <button class="btn btn-primary" id="tour-next">Next</button>
+          <button class="btn btn-secondary" id="tour-close">Close</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="modal" class="overlay">
+    <div class="modal-panel">
+      <div class="modal-header">
+        <h3 id="modal-title"></h3>
+        <button id="modal-close" class="modal-close-btn" aria-label="Close">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <div id="modal-body" class="modal-body"></div>
+    </div>
+  </div>
+
+  <div id="confirm-overlay" class="overlay">
+    <div class="confirm-panel">
+      <div class="confirm-icon">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--danger)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+      </div>
+      <p id="confirm-body" class="confirm-body"></p>
+      <div class="confirm-actions">
+        <button class="btn btn-secondary confirm-no">Cancel</button>
+        <button class="btn btn-danger confirm-yes">Delete</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast-container"></div>
+
+  <script src="js/store.js" defer></script>
+  <script src="js/ui.js" defer></script>
+  <script src="js/servers.js" defer></script>
+  <script src="js/snippets.js" defer></script>
+  <script src="js/settings.js" defer></script>
+  <script src="js/dashboard.js" defer></script>
+  <script src="js/tour.js" defer></script>
+  <script src="js/app.js" defer></script>
+</body>
+</html>
