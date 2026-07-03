@@ -193,7 +193,10 @@ const Servers = {
 
     let ws = null;
     let closed = false;
-    let autoScroll = true;
+    let minimized = false;
+    let term = null;
+    let fitAddon = null;
+    let ro = null;
 
     const h = [
       '<div class="terminal-modal">',
@@ -205,229 +208,237 @@ const Servers = {
       '<span class="terminal-badge">' + UI.escHtml(server.username) + '@' + UI.escHtml(server.ip) + '</span>',
       '</div>',
       '<div class="terminal-toolbar">',
-      '<button class="terminal-btn" id="term-auto-btn" title="Toggle auto-scroll">▼ <span>Auto</span></button>',
+      '<button class="btn btn-secondary btn-sm" id="term-min-btn" title="Minimize"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"/></svg></button>',
       '<button class="btn btn-secondary btn-sm" id="term-close-btn">Disconnect</button>',
       '</div>',
       '</div>',
       '<div id="term-output" class="terminal-output"></div>',
-      '<div class="terminal-input-row">',
-      '<span class="terminal-prompt">$</span>',
-      '<input type="text" id="term-input" class="terminal-input" placeholder="Enter command..." spellcheck="false" autofocus disabled>',
-      '<button class="btn btn-primary btn-sm" id="term-run-btn" disabled>Run</button>',
-      '</div>',
+      '<div class="terminal-resize-handle" id="term-resize-handle"></div>',
       '</div>'
     ];
 
-    UI.showModal('SSH Terminal — ' + server.name, h.join(''), () => {
+    const cleanup = () => {
+      if (closed) return;
       closed = true;
       if (ws) { try { ws.close(); } catch {} }
-      if (this._sessions && this._sessions[server.id]) {
-        this._disconnect(server.id);
+      if (ro) ro.disconnect();
+      if (term) { try { term.dispose(); } catch {} }
+      hideFloatingWidget();
+      this._disconnect(server.id);
+    };
+
+    UI.showModal('SSH Terminal — ' + server.name, h.join(''), cleanup);
+    UI._modalPreventClose = true;
+
+    const termContainer = document.getElementById('term-output');
+    const closeBtn = document.getElementById('term-close-btn');
+    const minBtn = document.getElementById('term-min-btn');
+    const resizeHandle = document.getElementById('term-resize-handle');
+    const statusDot = document.getElementById('term-status');
+
+    /* ── xterm.js setup ── */
+
+    fitAddon = new FitAddon();
+    term = new Terminal({
+      cursorBlink: true,
+      cursorStyle: 'block',
+      fontFamily: "'Consolas', 'Lucida Console', monospace",
+      fontSize: 13,
+      lineHeight: 1.1,
+      scrollback: 2000,
+      theme: {
+        background: '#000000',
+        foreground: '#ffffff',
+        cursor: '#00ff00',
+        cursorAccent: '#000000',
+        selectionBackground: '#555555',
+        selectionInactiveBackground: '#333333'
+      },
+      allowTransparency: false
+    });
+
+    term.loadAddon(fitAddon);
+    term.open(termContainer);
+    fitAddon.fit();
+
+    term.onData((data) => {
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: 'input', data }));
       }
     });
 
-    const output = document.getElementById('term-output');
-    const input = document.getElementById('term-input');
-    const runBtn = document.getElementById('term-run-btn');
-    const closeBtn = document.getElementById('term-close-btn');
-    const autoBtn = document.getElementById('term-auto-btn');
-    const statusDot = document.getElementById('term-status');
+    /* ── Resize: container → fitAddon → onResize → server ── */
 
-    /* ── ANSI → HTML parser ── */
-
-    const C = {30:'#666',31:'#f14c4c',32:'#23d18b',33:'#f5f543',34:'#3b8eea',35:'#d670d6',36:'#29b8db',37:'#e5e5e5',
-               90:'#666',91:'#f14c4c',92:'#23d18b',93:'#f5f543',94:'#3b8eea',95:'#d670d6',96:'#29b8db',97:'#fff',
-               40:'#000',41:'#cd3131',42:'#0dbc79',43:'#e5e510',44:'#2472c8',45:'#bc3fbc',46:'#11a8cd',47:'#e5e5e5',
-              100:'#000',101:'#cd3131',102:'#0dbc79',103:'#e5e510',104:'#2472c8',105:'#bc3fbc',106:'#11a8cd',107:'#e5e5e5'};
-
-    const esc = (s) => s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-
-    const S = { bold:false, dim:false, italic:false, underline:false, fg:null, bg:null,
-      reset() { this.bold=false; this.dim=false; this.italic=false; this.underline=false; this.fg=null; this.bg=null; },
-      inline() {
-        const a=[];
-        if (this.fg) a.push('color:'+this.fg);
-        if (this.bg) a.push('background:'+this.bg);
-        if (this.bold) a.push('font-weight:700');
-        if (this.italic) a.push('font-style:italic');
-        if (this.underline) a.push('text-decoration:underline');
-        if (this.dim) a.push('opacity:0.7');
-        return a.length ? ' style="'+a.join(';')+'"' : '';
+    term.onResize(({ cols, rows }) => {
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: 'resize', cols, rows }));
       }
-    };
+    });
 
-    const ansiToHtml = (str) => {
-      let out = '', i = 0;
-      while (i < str.length) {
-        if (str[i] === '\x1B' && i+1 < str.length) {
-          if (str[i+1] === '[') {
-            let j = i+2;
-            while (j < str.length && !/[A-Za-z]/.test(str[j])) j++;
-            if (j < str.length) {
-              const cmd = str[j], params = str.slice(i+2, j);
-              i = j+1;
-              if (cmd === 'm') {
-                const prev = S.inline();
-                if (!params || params === '0') S.reset();
-                else for (const c of params.split(';')) {
-                  const n = parseInt(c,10);
-                  if (c === '' || c === '0') S.reset();
-                  else if (n === 1) S.bold = true;
-                  else if (n === 2) S.dim = true;
-                  else if (n === 3) S.italic = true;
-                  else if (n === 4) S.underline = true;
-                  else if (n === 22) { S.bold = false; S.dim = false; }
-                  else if (n === 23) S.italic = false;
-                  else if (n === 24) S.underline = false;
-                  else if (n === 39) S.fg = null;
-                  else if (n === 49) S.bg = null;
-                  else if (C[n]) { if (n >= 40 && n <= 47 || n >= 100 && n <= 107) S.bg = C[n]; else S.fg = C[n]; }
-                }
-                const cur = S.inline();
-                if (prev) out += '</span>';
-                if (cur) out += '<span'+cur+'>';
-              }
-              // other escape sequences (cursor moves) silently dropped
-              continue;
-            }
-          } else if (str[i+1] === ']') {
-            let j = i+2;
-            while (j < str.length && str[j] !== '\x07' && !(str[j] === '\x1B' && j+1 < str.length && str[j+1] === '\\')) j++;
-            i = j < str.length ? j+1 : str.length;
-            continue;
-          } else { i += 2; continue; }
-        }
-        out += esc(str[i]);
-        i++;
-      }
-      return out;
-    };
-
-    /* ── Output buffer & render ── */
-
-    let outLen = 0;
-    const MAX_OUT = 150 * 1024;
-
-    const append = (data) => {
-      if (data.includes('\x1B[2J') || data.includes('\x1B[H\x1B[2J')) {
-        output.innerHTML = '';
-        outLen = 0;
-        S.reset();
-      }
-      const html = ansiToHtml(data);
-      if (!html) return;
-      output.insertAdjacentHTML('beforeend', html);
-      outLen += html.length;
-      if (outLen > MAX_OUT) {
-        const idx = output.innerHTML.lastIndexOf('\n', output.innerHTML.length - MAX_OUT/2);
-        output.innerHTML = output.innerHTML.slice(Math.max(0, idx > 0 ? idx : output.innerHTML.length - MAX_OUT/2));
-        outLen = output.innerHTML.length;
-      }
-      if (autoScroll) output.scrollTop = output.scrollHeight;
-    };
+    ro = new ResizeObserver(() => {
+      try { fitAddon.fit(); } catch {}
+    });
+    ro.observe(termContainer);
 
     /* ── WebSocket connection ── */
 
-    const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-    ws = new WebSocket(proto + '//' + location.host + '/ws/terminal?sessionId=' + sessionId);
+    let reconnectAttempt = 0;
+    const maxReconnectDelay = 30000;
+    const initWs = () => {
+      const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+      ws = new WebSocket(proto + '//' + location.host + '/ws/terminal?sessionId=' + sessionId);
 
-    ws.onopen = () => {
-      output.innerHTML = '';
-      outLen = 0;
-      S.reset();
-      input.disabled = false;
-      runBtn.disabled = false;
-      statusDot.className = 'status-dot connected';
-      input.focus();
+      ws.onopen = () => {
+        reconnectAttempt = 0;
+        term.reset();
+        statusDot.className = 'status-dot connected';
+        try { fitAddon.fit(); } catch {}
+        term.focus();
+      };
+
+      ws.onmessage = (e) => {
+        term.write(e.data);
+      };
+
+      ws.onerror = () => {
+        if (closed) return;
+        term.writeln('\r\n\x1b[31mWebSocket error\x1b[0m');
+        statusDot.className = 'status-dot error';
+      };
+
+      ws.onclose = (evt) => {
+        if (closed) return;
+        const reason = evt.reason ? ' (' + evt.reason + ')' : '';
+        term.writeln('\r\n\x1b[33mConnection closed (code ' + evt.code + ')' + reason + '\x1b[0m');
+        statusDot.className = 'status-dot';
+        const delay = Math.min(1000 * Math.pow(2, reconnectAttempt), maxReconnectDelay);
+        reconnectAttempt++;
+        setTimeout(initWs, delay);
+      };
     };
 
-    ws.onmessage = (e) => {
-      try {
-        const msg = JSON.parse(e.data);
-        if (msg.type === 'ready') return;
-      } catch {}
-      append(e.data);
-    };
+    initWs();
 
-    ws.onerror = () => {
-      if (closed) return;
-      append('WebSocket error — check that the ChuweyDevPanel server is running.\n');
-      input.disabled = true;
-      runBtn.disabled = true;
-      statusDot.className = 'status-dot error';
-    };
+    /* ── Paste support ── */
 
-    ws.onclose = (evt) => {
-      if (closed) return;
-      const reason = evt.reason ? ' (' + evt.reason + ')' : '';
-      append('Connection closed (code ' + evt.code + ')' + reason + '.\n');
-      input.disabled = true;
-      runBtn.disabled = true;
-      statusDot.className = 'status-dot';
-    };
-
-    /* ── Send input ── */
-
-    const sendInput = (text) => {
-      if (ws && ws.readyState === WebSocket.OPEN) {
+    termContainer.addEventListener('paste', (e) => {
+      e.preventDefault();
+      const text = (e.clipboardData || window.clipboardData).getData('text/plain');
+      if (text && ws && ws.readyState === WebSocket.OPEN) {
         ws.send(JSON.stringify({ type: 'input', data: text }));
       }
-    };
-
-    const cmdHistory = [];
-    let cmdIdx = -1;
-
-    const runCmd = () => {
-      const cmd = input.value;
-      if (!cmd) return;
-      sendInput(cmd + '\n');
-      if (!cmdHistory.length || cmdHistory[cmdHistory.length - 1] !== cmd) {
-        cmdHistory.push(cmd);
-      }
-      cmdIdx = cmdHistory.length;
-      input.value = '';
-    };
-
-    runBtn.addEventListener('click', runCmd);
-
-    input.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') {
-        runCmd();
-      } else if (e.key === 'ArrowUp') {
-        e.preventDefault();
-        if (cmdHistory.length && cmdIdx > 0) {
-          cmdIdx--;
-          input.value = cmdHistory[cmdIdx];
-        }
-      } else if (e.key === 'ArrowDown') {
-        e.preventDefault();
-        if (cmdIdx < cmdHistory.length - 1) {
-          cmdIdx++;
-          input.value = cmdHistory[cmdIdx];
-        } else {
-          cmdIdx = cmdHistory.length;
-          input.value = '';
-        }
-      } else if (e.key === 'c' && e.ctrlKey) { e.preventDefault(); sendInput('\x03'); }
-      else if (e.key === 'd' && e.ctrlKey) { e.preventDefault(); sendInput('\x04'); }
-      else if (e.key === 'l' && e.ctrlKey) { e.preventDefault(); sendInput('\x0c'); }
-      else if (e.key === 'z' && e.ctrlKey) { e.preventDefault(); sendInput('\x1a'); }
-      else if (e.key === 'u' && e.ctrlKey) { e.preventDefault(); input.value = ''; }
     });
 
-    /* ── Auto-scroll toggle ── */
-
-    autoBtn.addEventListener('click', () => {
-      autoScroll = !autoScroll;
-      autoBtn.classList.toggle('active', autoScroll);
-      if (autoScroll) output.scrollTop = output.scrollHeight;
+    termContainer.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      navigator.clipboard.readText().then(text => {
+        if (text && ws && ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ type: 'input', data: text }));
+        }
+      }).catch(() => {});
     });
-    autoBtn.classList.add('active');
+
+    /* ── Close button ── */
 
     closeBtn.addEventListener('click', () => {
-      closed = true;
-      if (ws) { try { ws.close(); } catch {} }
+      UI._modalPreventClose = false;
       UI.hideModal();
+    });
+
+    /* ── Minimize / Restore ── */
+
+    const floatEl = document.getElementById('terminal-floating');
+    const floatName = document.getElementById('tf-name');
+    const floatStatus = document.getElementById('tf-status');
+    const floatClose = document.getElementById('tf-close');
+    const modalEl = document.getElementById('modal');
+    const modalCloseBtn = document.getElementById('modal-close');
+
+    const showFloatingWidget = () => {
+      floatName.textContent = server.name;
+      floatStatus.className = 'status-dot' + (ws && ws.readyState === WebSocket.OPEN ? ' connected' : '');
+      floatEl.style.display = 'flex';
+    };
+
+    const hideFloatingWidget = () => {
+      floatEl.style.display = 'none';
+    };
+
+    const minimizeTerminal = () => {
+      if (closed || minimized) return;
+      minimized = true;
+      modalEl.classList.remove('show');
+      document.body.style.overflow = '';
+      showFloatingWidget();
+    };
+
+    const restoreTerminal = () => {
+      if (closed || !minimized) return;
+      minimized = false;
+      hideFloatingWidget();
+      modalEl.classList.add('show');
+      document.body.style.overflow = 'hidden';
+      try { fitAddon.fit(); } catch {}
+      term.focus();
+    };
+
+    /* Override modal-close X: minimize instead of close when connected */
+    const newCloseBtn = modalCloseBtn.cloneNode(true);
+    modalCloseBtn.parentNode.replaceChild(newCloseBtn, modalCloseBtn);
+    newCloseBtn.addEventListener('click', (e) => {
+      if (closed) { UI._modalPreventClose = false; UI.hideModal(); return; }
+      minimizeTerminal();
+    });
+
+    /* Override backdrop click to minimize */
+    modalEl.addEventListener('click', (e) => {
+      if (e.target !== modalEl || closed) return;
+      minimizeTerminal();
+    });
+
+    /* Minimize button in toolbar */
+    minBtn.addEventListener('click', () => {
+      minimizeTerminal();
+    });
+
+    /* Floating widget: click body to restore */
+    floatEl.addEventListener('click', (e) => {
+      if (e.target === floatClose || floatClose.contains(e.target)) return;
+      restoreTerminal();
+    });
+
+    /* Floating widget X: disconnect */
+    floatClose.addEventListener('click', () => {
+      if (closed) return;
+      hideFloatingWidget();
+      UI._modalPreventClose = false;
+      UI.hideModal();
+    });
+
+    /* ── Resize handle ── */
+
+    let resizeStart = 0;
+    let resizeHeight = 0;
+
+    resizeHandle.addEventListener('mousedown', (e) => {
+      e.preventDefault();
+      resizeStart = e.clientY;
+      resizeHeight = termContainer.offsetHeight;
+      document.body.classList.add('resizing-terminal');
+
+      const onMove = (ev) => {
+        const delta = ev.clientY - resizeStart;
+        const newH = Math.max(150, resizeHeight + delta);
+        termContainer.style.height = newH + 'px';
+        try { fitAddon.fit(); } catch {}
+      };
+      const onUp = () => {
+        document.body.classList.remove('resizing-terminal');
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+      };
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
     });
   },
 
@@ -442,16 +453,77 @@ const Servers = {
       '<div class="form-group flex-1"><label class="form-label">Port</label><input type="number" name="port" class="form-input" value="' + (s && s.port ? s.port : '22') + '" min="1" max="65535"></div></div>',
       '<div class="form-group"><label class="form-label">Username</label><input type="text" name="username" class="form-input" required placeholder="root" value="' + UI.escAttr(s ? s.username : '') + '"></div>',
       '<div class="form-group"><label class="form-label">Password <span class="text-muted">(optional, stored locally)</span></label><input type="password" name="password" class="form-input" placeholder="SSH password" value="' + UI.escAttr(s && s.password ? s.password : '') + '" autocomplete="off"></div>',
+      '<div class="form-group">',
+      '<label class="form-label">Connection Test</label>',
+      '<div class="test-connection-row">',
+      '<button type="button" class="btn btn-secondary" id="test-conn-btn">Test Connection</button>',
+      '<span id="test-conn-status"></span>',
+      '</div>',
+      '</div>',
       '<div class="form-group"><label class="form-label">Notes</label><textarea name="notes" class="form-input form-textarea" placeholder="Optional notes...">' + UI.escHtml(s ? s.notes || '' : '') + '</textarea></div>',
       '<div class="form-group"><label class="form-label">Last Reboot <span class="text-muted">(auto-detected via dashboard)</span></label><input type="text" name="lastReboot" class="form-input" placeholder="2025-01-15 08:30 or leave blank" value="' + UI.escAttr(s && s.lastReboot ? s.lastReboot : '') + '"></div>',
       '<div class="form-actions"><button type="button" class="btn btn-secondary" onclick="UI.hideModal()">Cancel</button>',
-      '<button type="submit" class="btn btn-primary">' + (s ? 'Update' : 'Add') + ' Server</button></div>'
+      '<button type="submit" class="btn btn-primary" id="save-server-btn" disabled>' + (s ? 'Update' : 'Add') + ' Server</button></div>'
     );
     h.push('</form>');
     UI.showModal(title, h.join(''));
 
+    let connectionVerified = false;
+
+    document.getElementById('test-conn-btn').addEventListener('click', () => {
+      const form = document.getElementById('server-form');
+      const ip = form.querySelector('[name="ip"]').value.trim();
+      const port = form.querySelector('[name="port"]').value.trim() || '22';
+      const statusEl = document.getElementById('test-conn-status');
+      const btn = document.getElementById('test-conn-btn');
+      const saveBtn = document.getElementById('save-server-btn');
+
+      if (!ip) { statusEl.className = 'test-status fail'; statusEl.textContent = 'Enter an IP address first'; return; }
+
+      statusEl.className = 'test-status testing';
+      statusEl.textContent = 'Testing...';
+      btn.disabled = true;
+      saveBtn.disabled = true;
+      connectionVerified = false;
+
+      const username = form.querySelector('[name="username"]').value.trim();
+      const password = form.querySelector('[name="password"]').value;
+
+      if (!username) { statusEl.className = 'test-status fail'; statusEl.textContent = 'Enter a username first'; btn.disabled = false; return; }
+
+      fetch('/api/ssh/test-connection', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ host: ip, port: parseInt(port, 10), username, password })
+      })
+      .then(r => r.json())
+      .then(data => {
+        btn.disabled = false;
+        if (data.success) {
+          statusEl.className = 'test-status pass';
+          statusEl.textContent = 'SSH authentication successful';
+          connectionVerified = true;
+          saveBtn.disabled = false;
+        } else {
+          statusEl.className = 'test-status fail';
+          statusEl.textContent = data.error || 'Connection failed';
+          connectionVerified = false;
+        }
+      })
+      .catch(err => {
+        btn.disabled = false;
+        statusEl.className = 'test-status fail';
+        statusEl.textContent = 'Error: ' + err.message;
+        connectionVerified = false;
+      });
+    });
+
     document.getElementById('server-form').addEventListener('submit', (e) => {
       e.preventDefault();
+      if (!connectionVerified) {
+        UI.toast('Please test the connection before saving');
+        return;
+      }
       const fd = new FormData(e.target);
       const data = Object.fromEntries(fd);
       if (data.password === '') delete data.password;

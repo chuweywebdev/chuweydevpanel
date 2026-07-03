@@ -31,13 +31,13 @@ const App = {
   },
 
   _render(route) {
-    document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
-    const validRoutes = ['dashboard', 'servers', 'snippets', 'settings'];
+    document.querySelectorAll('.nav-item').forEach(el => { el.classList.remove('active'); el.removeAttribute('aria-current'); });
+    const validRoutes = ['dashboard', 'servers', 'snippets', 'settings', 'backup'];
     if (!validRoutes.includes(route)) route = 'servers';
     const activeLink = document.querySelector('.nav-item[data-route="' + route + '"]');
-    if (activeLink) activeLink.classList.add('active');
+    if (activeLink) { activeLink.classList.add('active'); activeLink.setAttribute('aria-current', 'page'); }
 
-    const titles = { dashboard: 'Dashboard', servers: 'Servers', snippets: 'Snippets', settings: 'Settings' };
+    const titles = { dashboard: 'Dashboard', servers: 'Servers', snippets: 'Snippets', settings: 'Settings', backup: 'Cloud Backup' };
     const pageTitle = document.getElementById('page-title');
     if (pageTitle) pageTitle.textContent = titles[route] || 'ChuweyDevPanel';
 
@@ -49,12 +49,18 @@ const App = {
     freshContent.classList.remove('page-enter');
     void freshContent.offsetWidth;
 
-    switch (route) {
-      case 'dashboard': Dashboard.render(); break;
-      case 'servers': Servers.render(); break;
-      case 'snippets': Snippets.render(); break;
-      case 'settings': Settings.render(); break;
-      default: Servers.render();
+    try {
+      switch (route) {
+        case 'dashboard': Dashboard.render(); break;
+        case 'servers': Servers.render(); break;
+        case 'snippets': Snippets.render(); break;
+        case 'settings': Settings.render(); break;
+        case 'backup': Backup.render(); break;
+        default: Servers.render();
+      }
+    } catch (err) {
+      freshContent.innerHTML = '<div class="empty-state"><p>Failed to load: ' + UI.escHtml(err.message) + '</p><button class="btn btn-primary" onclick="App.navigate(\'servers\')">Go to Servers</button></div>';
+      console.error('Render error:', err);
     }
 
     requestAnimationFrame(() => freshContent.classList.add('page-enter'));
@@ -72,6 +78,24 @@ const App = {
 
   _setupKeyboard() {
     document.getElementById('tour-btn').addEventListener('click', () => TourGuide.start());
+    const sidebar = document.getElementById('sidebar');
+    if (sidebar) {
+      sidebar.addEventListener('keydown', (e) => {
+        const items = Array.from(sidebar.querySelectorAll('.nav-item'));
+        const idx = items.indexOf(document.activeElement);
+        if (idx === -1) return;
+        if (e.key === 'ArrowDown') {
+          e.preventDefault();
+          items[Math.min(idx + 1, items.length - 1)].focus();
+        } else if (e.key === 'ArrowUp') {
+          e.preventDefault();
+          items[Math.max(idx - 1, 0)].focus();
+        } else if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          items[idx].click();
+        }
+      });
+    }
   },
 
   _setupMobileMenu() {

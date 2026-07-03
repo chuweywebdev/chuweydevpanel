@@ -1,6 +1,6 @@
 const Settings = {
   render() {
-    const theme = Store.getSetting('theme', 'dark');
+    const theme = Store.getSetting('theme', 'light');
     const h = ['<div class="settings-container">',
 
       '<section class="settings-section">',

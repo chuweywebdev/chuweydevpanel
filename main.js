@@ -10,6 +10,8 @@ const LOG_FILE = path.join(app.getPath('userData'), 'devpanel.log');
 
 let mainWindow = null;
 let serverProcess = null;
+let serverRestartCount = 0;
+const MAX_SERVER_RESTARTS = 5;
 
 function log(msg) {
   const line = `[${new Date().toISOString()}] ${msg}`;
@@ -48,10 +50,12 @@ function startServer() {
   };
 
   if (app.isPackaged) {
-    const asarModules = path.join(process.resourcesPath, 'app.asar', 'node_modules');
-    forkEnv.NODE_PATH = forkEnv.NODE_PATH
-      ? [asarModules, forkEnv.NODE_PATH].join(path.delimiter)
-      : asarModules;
+    const unpackedModules = path.join(process.resourcesPath, 'app.asar.unpacked', 'node_modules');
+    if (forkEnv.NODE_PATH) {
+      forkEnv.NODE_PATH = [unpackedModules, forkEnv.NODE_PATH].join(path.delimiter);
+    } else {
+      forkEnv.NODE_PATH = unpackedModules;
+    }
   }
 
   serverProcess = fork(serverScriptPath(), [], {
@@ -64,17 +68,63 @@ function startServer() {
 
     serverProcess.on('error', reject);
 
-    serverProcess.on('exit', (code) => {
-      log('Server process exited with code ' + code);
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.loadURL(
-          'data:text/html,' + encodeURIComponent(
-            '<h1 style="font-family:sans-serif;color:#e06c75">Server Crashed</h1>' +
-            '<p style="font-family:sans-serif;color:#abb2bf">' +
-            'The backend server exited unexpectedly (code: ' + code + ').<br>' +
-            'Please restart the application.</p>'
-          )
-        ).catch(() => {});
+    serverProcess.on('exit', (code, signal) => {
+      log('Server process exited (code=' + code + ', signal=' + signal + ')');
+      serverProcess = null;
+      if (code === 0) return;
+      if (serverRestartCount < MAX_SERVER_RESTARTS) {
+        serverRestartCount++;
+        const delay = Math.min(2000 * serverRestartCount, 10000);
+        log('Restarting server in ' + delay + 'ms (attempt ' + serverRestartCount + '/' + MAX_SERVER_RESTARTS + ')');
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.loadURL(
+            'data:text/html,' + encodeURIComponent(
+              '<html><head><style>' +
+              'body{background:#1e1e2e;color:#cdd6f4;font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0}' +
+              '.container{text-align:center}' +
+              '.spinner{border:4px solid #313244;border-top:4px solid #89b4fa;border-radius:50%;width:40px;height:40px;animation:spin 1s linear infinite;margin:0 auto 16px}' +
+              '@keyframes spin{to{transform:rotate(360deg)}}' +
+              '</style></head><body>' +
+              '<div class="container">' +
+              '<div class="spinner"></div>' +
+              '<h2 style="color:#89b4fa;margin:0">Reconnecting…</h2>' +
+              '<p style="color:#6c7086">Attempt ' + serverRestartCount + '/' + MAX_SERVER_RESTARTS + '</p>' +
+              '</div></body></html>'
+            )
+          ).catch(() => {});
+        }
+        setTimeout(() => {
+          if (mainWindow && !mainWindow.isDestroyed()) startServer()
+            .then(() => {
+              serverRestartCount = 0;
+              log('Server restarted successfully');
+              if (mainWindow && !mainWindow.isDestroyed()) {
+                mainWindow.loadURL(SERVER_URL).catch(() => {});
+              }
+            })
+            .catch((err) => log('Server restart failed: ' + err.message));
+        }, delay);
+      } else {
+        log('Max server restarts reached. Giving up.');
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.loadURL(
+            'data:text/html,' + encodeURIComponent(
+              '<html><head><style>body{background:#1e1e2e;color:#cdd6f4;font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0}.container{text-align:center}button{margin-top:20px;padding:12px 24px;background:#89b4fa;color:#1e1e2e;border:none;border-radius:8px;font-size:16px;cursor:pointer}button:hover{background:#b4d0fb}</style></head><body>' +
+              '<div class="container">' +
+              '<h1 style="color:#f38ba8">Server Crashed</h1>' +
+              '<p>The backend server exited unexpectedly after ' + MAX_SERVER_RESTARTS + ' restart attempts.</p>' +
+              '<p style="color:#6c7086;font-size:14px">Check the log file for details:<br>' + LOG_FILE + '</p>' +
+              '<button onclick="location.reload()">Restart App</button>' +
+              '</div></body></html>'
+            )
+          ).catch(() => {});
+        }
+      }
+    });
+
+    serverProcess.on('message', (msg) => {
+      if (msg && msg.type === 'error') {
+        log('Server error: ' + msg.message + (msg.stack ? '\n' + msg.stack : ''));
       }
     });
 
@@ -144,7 +194,10 @@ function createWindow() {
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     try {
       const parsed = new URL(url);
-      if (parsed.protocol === 'https:' || parsed.protocol === 'http:') {
+      const allowed = new Set([
+        'www.facebook.com',
+      ]);
+      if ((parsed.protocol === 'https:' || parsed.protocol === 'http:') && allowed.has(parsed.hostname)) {
         require('electron').shell.openExternal(url);
       }
     } catch {}

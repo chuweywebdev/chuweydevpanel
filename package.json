@@ -1,6 +1,6 @@
 {
   "name": "chuweydevpanel",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "private": true,
   "description": "ChuweyDevPanel - SSH server manager and command runner",
   "main": "main.js",
@@ -33,7 +33,8 @@
     "asarUnpack": [
       "server.js",
       "preload.js",
-      "public/**"
+      "public/**",
+      "node_modules/**"
     ],
     "npmRebuild": false,
     "compression": "maximum",
@@ -52,8 +53,11 @@
     }
   },
   "dependencies": {
+    "@xterm/addon-fit": "^0.11.0",
+    "@xterm/xterm": "^6.0.0",
     "cors": "^2.8.5",
     "express": "^4.21.0",
+    "express-rate-limit": "^8.5.2",
     "ssh2": "^1.16.0",
     "wait-on": "^8.0.0",
     "ws": "^8.18.0"

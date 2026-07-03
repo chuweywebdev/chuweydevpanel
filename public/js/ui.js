@@ -31,15 +31,23 @@ const UI = {
     }, duration);
   },
 
+  _modalPreventClose: false,
+
+  setModalPreventClose(v) {
+    this._modalPreventClose = v;
+  },
+
   showModal(title, body, onHide) {
     this.modalTitle.textContent = title;
     this.modalBody.innerHTML = body;
     this.modal.classList.add('show');
     document.body.style.overflow = 'hidden';
     this._onModalHide = onHide || null;
+    this._modalPreventClose = false;
   },
 
   hideModal() {
+    if (this._modalPreventClose) return;
     this.modal.classList.remove('show');
     document.body.style.overflow = '';
     if (this._onModalHide) {
@@ -90,6 +98,17 @@ const UI = {
       this.toast('Failed to copy', 'error');
     }
     document.body.removeChild(ta);
+  },
+
+  showLoading(el, text) {
+    text = text || 'Loading...';
+    el.innerHTML = '<div class="empty-state"><div class="dsc-spinner" style="width:24px;height:24px;margin:0 auto 12px"></div><p>' + this.escHtml(text) + '</p></div>';
+  },
+
+  skeleton(type) {
+    if (type === 'stat') return '<div class="skeleton skeleton-stat"></div>';
+    if (type === 'card') return '<div class="skeleton skeleton-card"></div>';
+    return '<div class="skeleton skeleton-line"></div>';
   },
 
   escHtml(str) {

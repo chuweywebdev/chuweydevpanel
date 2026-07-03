@@ -15,10 +15,10 @@ const Snippets = {
     '</div>'];
 
     if (tags.length) {
-      h.push('<div class="filter-bar">');
-      h.push('<span class="filter-chip' + (!this._tagFilter ? ' active' : '') + '" data-snip-filter="">All</span>');
+      h.push('<div class="filter-bar" role="group" aria-label="Filter by tag">');
+      h.push('<span class="filter-chip' + (!this._tagFilter ? ' active' : '') + '" data-snip-filter="" tabindex="0" role="button" aria-pressed="' + (!this._tagFilter ? 'true' : 'false') + '">All</span>');
       for (const tag of tags) {
-        h.push('<span class="filter-chip' + (this._tagFilter === tag ? ' active' : '') + '" data-snip-filter="' + UI.escAttr(tag) + '">' + UI.escHtml(tag) + '</span>');
+        h.push('<span class="filter-chip' + (this._tagFilter === tag ? ' active' : '') + '" data-snip-filter="' + UI.escAttr(tag) + '" tabindex="0" role="button" aria-pressed="' + (this._tagFilter === tag ? 'true' : 'false') + '">' + UI.escHtml(tag) + '</span>');
       }
       h.push('</div>');
     }
@@ -35,6 +35,15 @@ const Snippets = {
     document.getElementById('content').innerHTML = h.join('');
 
     document.getElementById('add-snip-btn').addEventListener('click', () => this.form());
+    document.getElementById('content').addEventListener('keydown', (e) => {
+      const chip = e.target.classList.contains('filter-chip') ? e.target : null;
+      if (!chip) return;
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        this._tagFilter = chip.dataset.snipFilter || '';
+        this.render();
+      }
+    });
     document.getElementById('content').addEventListener('click', (e) => {
       const card = e.target.closest('.snip-card');
       if (!card) return;

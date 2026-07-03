@@ -7,7 +7,7 @@ const Store = {
     if (saved) {
       try {
         this.data = JSON.parse(saved);
-        if (!this.data.settings) this.data.settings = { theme: 'dark' };
+        if (!this.data.settings) this.data.settings = { theme: 'light' };
         if (!Array.isArray(this.data.servers)) this.data.servers = [];
         if (!Array.isArray(this.data.snippets)) this.data.snippets = [];
       } catch {
@@ -23,7 +23,7 @@ const Store = {
     this.data = {
       servers: [],
       snippets: [],
-      settings: { theme: 'dark' }
+      settings: { theme: 'light' }
     };
     this.save();
   },
@@ -82,12 +82,12 @@ const Store = {
   },
 
   toggleTheme() {
-    const cur = this.getSetting('theme', 'dark');
+    const cur = this.getSetting('theme', 'light');
     this.setSetting('theme', cur === 'dark' ? 'light' : 'dark');
   },
 
   applyTheme() {
-    document.documentElement.setAttribute('data-theme', this.getSetting('theme', 'dark'));
+    document.documentElement.setAttribute('data-theme', this.getSetting('theme', 'light'));
   },
 
   exportData() {
