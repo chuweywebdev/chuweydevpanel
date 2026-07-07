@@ -3,6 +3,8 @@ const { fork } = require('child_process');
 const path = require('path');
 const fs = require('fs');
 const waitOn = require('wait-on');
+const { autoUpdater } = require('electron-updater');
+const electronLog = require('electron-log');
 
 const PORT = 1000;
 const SERVER_URL = `http://localhost:${PORT}`;
@@ -236,6 +238,70 @@ ipcMain.handle('get-version', () => {
   return app.getVersion();
 });
 
+/* ─── Auto-Updater ──────────────────────────────────────────────────── */
+
+autoUpdater.logger = electronLog;
+autoUpdater.autoDownload = false;
+autoUpdater.autoInstallOnAppQuit = true;
+
+function setupAutoUpdater() {
+  if (!app.isPackaged) {
+    electronLog.info('Auto-updater disabled in development');
+    return;
+  }
+
+  autoUpdater.on('checking-for-update', () => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('checking-for-update');
+    }
+  });
+
+  autoUpdater.on('update-available', (info) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('update-available', info);
+    }
+  });
+
+  autoUpdater.on('update-not-available', (info) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('update-not-available', info);
+    }
+  });
+
+  autoUpdater.on('error', (err) => {
+    electronLog.error('Auto-updater error: ' + (err ? err.message : 'unknown'));
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('update-error', err ? err.message : 'Unknown error');
+    }
+  });
+
+  autoUpdater.on('download-progress', (progressObj) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('update-download-progress', progressObj);
+    }
+  });
+
+  autoUpdater.on('update-downloaded', (info) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('update-downloaded', info);
+    }
+  });
+}
+
+ipcMain.handle('check-for-updates', () => {
+  if (app.isPackaged) {
+    autoUpdater.checkForUpdates().catch(err => electronLog.error('checkForUpdates error: ' + err.message));
+  }
+});
+
+ipcMain.handle('download-update', () => {
+  autoUpdater.downloadUpdate().catch(err => electronLog.error('downloadUpdate error: ' + err.message));
+});
+
+ipcMain.handle('quit-and-install', () => {
+  setImmediate(() => autoUpdater.quitAndInstall());
+});
+
 /* ─── App Lifecycle ──────────────────────────────────────────────────── */
 
 app.whenReady().then(async () => {
@@ -248,6 +314,10 @@ app.whenReady().then(async () => {
 
     await startServer();
     createWindow();
+    setupAutoUpdater();
+    if (app.isPackaged) {
+      autoUpdater.checkForUpdates().catch(err => electronLog.error('checkForUpdates error: ' + err.message));
+    }
   } catch (err) {
     log('Failed to start: ' + err.message);
     app.quit();

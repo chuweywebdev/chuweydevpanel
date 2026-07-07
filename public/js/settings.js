@@ -8,7 +8,7 @@ const Settings = {
       '<div class="settings-section-body">',
       '<div class="settings-row">',
       '<div><div class="settings-label">Theme</div><div class="settings-desc">Switch between dark and light mode.</div></div>',
-      '<label class="toggle-switch"><input type="checkbox" id="theme-toggle"' + (theme === 'light' ? ' checked' : '') + '><span class="toggle-slider"></span></label>',
+      '<label class="toggle-switch"><input type="checkbox" id="theme-toggle"' + (theme === 'dark' ? ' checked' : '') + '><span class="toggle-slider"></span></label>',
       '</div>',
       '</div>',
       '</section>',
@@ -94,7 +94,7 @@ const Settings = {
       try {
         const parsed = JSON.parse(ev.target.result);
         if (!Store.validateImport(parsed)) {
-          UI.toast('Invalid import: missing required fields (servers, commands, snippets)', 'error');
+          UI.toast('Invalid import: missing required fields (servers, snippets)', 'error');
           return;
         }
         Store.importData(parsed);

@@ -120,6 +120,19 @@ const Backup = {
     UI.toast('Backup settings saved');
   },
 
+  _setLoading(id, loading) {
+    const btn = document.getElementById(id);
+    if (!btn) return;
+    if (loading) {
+      btn.dataset.origHtml = btn.innerHTML;
+      btn.disabled = true;
+      btn.innerHTML = '<span class="dsc-spinner" style="display:inline-block;width:14px;height:14px;vertical-align:middle;margin-right:4px"></span> ' + btn.textContent.trim();
+    } else {
+      btn.disabled = false;
+      btn.innerHTML = btn.dataset.origHtml || btn.innerHTML;
+    }
+  },
+
   _test() {
     this._save();
     const token = Store.getSetting('backup_telegram_token', '');
@@ -127,6 +140,7 @@ const Backup = {
       UI.toast('Please enter a Bot Token first', 'error');
       return;
     }
+    this._setLoading('backup-test', true);
     fetch('/api/backup/test', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -140,7 +154,8 @@ const Backup = {
       if (d.ok) UI.toast('Test message sent! Check your Telegram bot.');
       else UI.toast('Failed: ' + (d.error || 'Unknown error'), 'error');
     })
-    .catch(() => UI.toast('Network error — server may be offline', 'error'));
+    .catch(() => UI.toast('Network error — server may be offline', 'error'))
+    .finally(() => this._setLoading('backup-test', false));
   },
 
   _exportNow() {
@@ -162,6 +177,7 @@ const Backup = {
       snippets: Store.data.snippets || [],
       settings: Store.data.settings || {}
     };
+    this._setLoading('backup-export', true);
     fetch('/api/backup/export', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -176,7 +192,8 @@ const Backup = {
       if (d.ok) UI.toast('Backup sent to Telegram!');
       else UI.toast('Failed: ' + (d.error || 'Unknown error'), 'error');
     })
-    .catch(() => UI.toast('Network error — server may be offline', 'error'));
+    .catch(() => UI.toast('Network error — server may be offline', 'error'))
+    .finally(() => this._setLoading('backup-export', false));
   },
 
   _detectChat() {
@@ -185,6 +202,7 @@ const Backup = {
       UI.toast('Enter your Bot Token first', 'error');
       return;
     }
+    this._setLoading('backup-detect-chat', true);
     fetch('/api/backup/detect-chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -199,6 +217,7 @@ const Backup = {
         UI.toast('No chat found. Send a message to your bot first.', 'warning');
       }
     })
-    .catch(() => UI.toast('Network error — server may be offline', 'error'));
+    .catch(() => UI.toast('Network error — server may be offline', 'error'))
+    .finally(() => this._setLoading('backup-detect-chat', false));
   }
 };

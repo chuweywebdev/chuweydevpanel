@@ -128,6 +128,10 @@ const Dashboard = {
 
   async checkAll() {
     const servers = Store.getAll('servers').filter(s => s.ip || s.hostname);
+    const container = document.getElementById('dashboard-server-list');
+    if (container) {
+      container.innerHTML = servers.map(() => '<div class="dashboard-server-card"><div class="dsc-info" style="flex:1"><div class="skeleton skeleton-line w-50"></div><div class="skeleton skeleton-line w-75"></div></div><div class="dsc-status" style="flex:1"><div class="skeleton skeleton-line w-40"></div></div><div class="dsc-actions"><div class="skeleton skeleton-line w-25"></div></div></div>').join('');
+    }
     for (const server of servers) {
       await this.checkReboot(server.id, true);
     }
@@ -167,7 +171,7 @@ const Dashboard = {
           ws.onerror = () => done(new Error('WebSocket error'));
           ws.onclose = () => done(null, output);
 
-          setTimeout(() => { ws.send('exit\n'); done(null, output); }, 4000);
+          setTimeout(() => { if (ws.readyState === WebSocket.OPEN) { ws.send('exit\n'); } done(null, output); }, 4000);
         })
         .catch(e => reject(e));
     });

@@ -1,7 +1,7 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
-const ALLOWED_INVOKE = ['get-version'];
-const ALLOWED_ON = ['server-status', 'update-available'];
+const ALLOWED_INVOKE = ['get-version', 'check-for-updates', 'download-update', 'quit-and-install'];
+const ALLOWED_ON = ['server-status', 'update-available', 'checking-for-update', 'update-not-available', 'update-downloaded', 'update-error', 'update-download-progress'];
 
 contextBridge.exposeInMainWorld('electronAPI', {
   isElectron: true,

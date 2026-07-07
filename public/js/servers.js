@@ -22,30 +22,33 @@ const Servers = {
     document.getElementById('content').innerHTML = h.join('');
 
     document.getElementById('add-server-btn').addEventListener('click', () => this.form());
-    document.getElementById('content').addEventListener('click', (e) => {
-      const card = e.target.closest('.server-card');
-      if (!card) return;
-      const id = card.dataset.id;
-      if (e.target.closest('.copy-ssh')) {
-        const ssh = this._sshCmd(Store.getById('servers', id));
-        UI.copy(ssh, 'SSH command copied!');
-      } else if (e.target.closest('.edit-srv')) {
-        this.form(id);
-      } else if (e.target.closest('.del-srv')) {
-        this._del(id);
-      } else if (e.target.closest('.connect-srv')) {
-        this._connect(id);
-      } else if (e.target.closest('.disconnect-srv')) {
-        this._disconnect(id);
-      }
-    });
+    if (!this._clickHandler) {
+      this._clickHandler = (e) => {
+        const card = e.target.closest('.server-card');
+        if (!card) return;
+        const id = card.dataset.id;
+        if (e.target.closest('.copy-ssh')) {
+          const ssh = this._sshCmd(Store.getById('servers', id));
+          UI.copy(ssh, 'SSH command copied!');
+        } else if (e.target.closest('.edit-srv')) {
+          this.form(id);
+        } else if (e.target.closest('.del-srv')) {
+          this._del(id);
+        } else if (e.target.closest('.connect-srv')) {
+          this._connect(id);
+        } else if (e.target.closest('.disconnect-srv')) {
+          this._disconnect(id);
+        }
+      };
+      document.getElementById('content').addEventListener('click', this._clickHandler);
+    }
   },
 
   _card(s) {
     const id = s.id;
     const ssh = this._sshCmd(s);
     const notes = s.notes ? '<div class="server-notes">' + UI.escHtml(s.notes) + '</div>' : '';
-    const portStr = s.port && s.port !== '22' ? ':' + UI.escHtml(s.port) : '';
+    const portStr = s.port && String(s.port) !== '22' ? ':' + UI.escHtml(s.port) : '';
     const session = this._sessions && this._sessions[id];
     const connected = !!(session && session.connected);
     return '<div class="card server-card' + (connected ? ' connected' : '') + '" data-id="' + s.id + '">' +
@@ -79,7 +82,7 @@ const Servers = {
     const user = esc(s.username);
     const host = (s.ip || '').replace(/[^a-zA-Z0-9_.:-]/g, '');
     let cmd = 'ssh ' + user + '@' + host;
-    if (s.port && s.port !== '22') cmd += ' -p ' + (s.port || '').replace(/[^0-9]/g, '');
+    if (s.port && String(s.port) !== '22') cmd += ' -p ' + (s.port || '').replace(/[^0-9]/g, '');
     return cmd;
   },
 
@@ -115,6 +118,8 @@ const Servers = {
     };
 
     if (s.password || s.privateKey) {
+      if (!this._creds) this._creds = {};
+      this._creds[id] = { password: s.password || null, privateKey: s.privateKey || null };
       doConnect(s.password, s.privateKey);
       return;
     }
@@ -160,6 +165,8 @@ const Servers = {
           UI.hideModal();
           if (!this._sessions) this._sessions = {};
           this._sessions[id] = { sessionId: result.sessionId, connected: true };
+          if (!this._creds) this._creds = {};
+          this._creds[id] = { password: data.password || null, privateKey: data.privateKey || null };
           this._openTerminal(result.sessionId, s);
           this.render();
           UI.toast('Connected to ' + s.name, 'success');
@@ -176,11 +183,11 @@ const Servers = {
     const session = this._sessions && this._sessions[id];
     if (!session) return;
 
-    fetch('/api/ssh/disconnect', {
+      fetch('/api/ssh/disconnect', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ sessionId: session.sessionId })
-    }).catch(() => {});
+    }).catch(e => console.warn('Disconnect fetch error:', e.message));
 
     delete this._sessions[id];
     if (this._activeTerminalId === id) this._activeTerminalId = null;
@@ -198,26 +205,43 @@ const Servers = {
     let fitAddon = null;
     let ro = null;
 
-    const h = [
-      '<div class="terminal-modal">',
-      '<div class="terminal-header">',
-      '<div class="terminal-title">',
-      '<span class="status-dot" id="term-status"></span>',
-      '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>',
-      UI.escHtml(server.name),
-      '<span class="terminal-badge">' + UI.escHtml(server.username) + '@' + UI.escHtml(server.ip) + '</span>',
-      '</div>',
-      '<div class="terminal-toolbar">',
-      '<button class="btn btn-secondary btn-sm" id="term-min-btn" title="Minimize"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"/></svg></button>',
-      '<button class="btn btn-secondary btn-sm" id="term-close-btn">Disconnect</button>',
-      '</div>',
-      '</div>',
-      '<div id="term-output" class="terminal-output"></div>',
-      '<div class="terminal-resize-handle" id="term-resize-handle"></div>',
-      '</div>'
-    ];
+  const h = [
+    '<div class="terminal-modal">',
+    '<div class="terminal-header">',
+    '<div class="terminal-title">',
+    '<span class="status-dot" id="term-status"></span>',
+    '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>',
+    UI.escHtml(server.name),
+    '<span class="terminal-badge">' + UI.escHtml(server.username) + '@' + UI.escHtml(server.ip) + '</span>',
+    '</div>',
+    '<div class="terminal-toolbar">',
+    '<button class="btn btn-secondary btn-sm" id="term-min-btn" title="Minimize"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"/></svg></button>',
+    '<button class="btn btn-secondary btn-sm" id="term-close-btn">Disconnect</button>',
+    '</div>',
+    '</div>',
+    '<div id="term-output" class="terminal-output"></div>',
+    '<div class="terminal-resize-handle" id="term-resize-handle"></div>',
+    '</div>'
+  ];
 
-    const cleanup = () => {
+    const floatEl = document.getElementById('terminal-floating');
+    const floatName = document.getElementById('tf-name');
+    const floatStatus = document.getElementById('tf-status');
+    const floatClose = document.getElementById('tf-close');
+    const modalEl = document.getElementById('modal');
+    const modalCloseBtn = document.getElementById('modal-close');
+
+    const showFloatingWidget = () => {
+      floatName.textContent = server.name;
+      floatStatus.className = 'status-dot' + (ws && ws.readyState === WebSocket.OPEN ? ' connected' : '');
+      floatEl.style.display = 'flex';
+    };
+
+    const hideFloatingWidget = () => {
+      floatEl.style.display = 'none';
+    };
+
+    UI.showModal('SSH Terminal — ' + server.name, h.join(''), () => {
       if (closed) return;
       closed = true;
       if (ws) { try { ws.close(); } catch {} }
@@ -225,16 +249,14 @@ const Servers = {
       if (term) { try { term.dispose(); } catch {} }
       hideFloatingWidget();
       this._disconnect(server.id);
-    };
-
-    UI.showModal('SSH Terminal — ' + server.name, h.join(''), cleanup);
-    UI._modalPreventClose = true;
+    });
 
     const termContainer = document.getElementById('term-output');
     const closeBtn = document.getElementById('term-close-btn');
     const minBtn = document.getElementById('term-min-btn');
     const resizeHandle = document.getElementById('term-resize-handle');
     const statusDot = document.getElementById('term-status');
+    UI._modalPreventClose = true;
 
     /* ── xterm.js setup ── */
 
@@ -293,24 +315,82 @@ const Servers = {
         term.reset();
         statusDot.className = 'status-dot connected';
         try { fitAddon.fit(); } catch {}
+        const dims = fitAddon.proposeDimensions();
+        if (dims) {
+          ws.send(JSON.stringify({ type: 'resize', cols: dims.cols, rows: dims.rows }));
+        }
         term.focus();
       };
 
+      let wsErrored = false;
+
       ws.onmessage = (e) => {
+        try {
+          const msg = JSON.parse(e.data);
+          if (msg.type === 'ready') return;
+          if (msg.type === 'error') {
+            term.writeln('\r\n\x1b[31mError: ' + UI.escHtml(msg.message) + '\x1b[0m');
+            return;
+          }
+        } catch {}
         term.write(e.data);
       };
 
       ws.onerror = () => {
         if (closed) return;
-        term.writeln('\r\n\x1b[31mWebSocket error\x1b[0m');
-        statusDot.className = 'status-dot error';
+        wsErrored = true;
+      };
+
+      const tryReconnectSSH = () => {
+        const retry = (msg) => {
+          term.writeln('\r\n\x1b[33m' + msg + '\x1b[0m');
+          if (reconnectAttempt < 3) {
+            const delay = Math.min(1000 * Math.pow(2, reconnectAttempt), 10000);
+            reconnectAttempt++;
+            setTimeout(tryReconnectSSH, delay);
+          }
+        };
+        const creds = this._creds && this._creds[server.id];
+        if (!creds || (!creds.password && !creds.privateKey)) {
+          retry('No saved credentials — click Connect to re-enter');
+          return;
+        }
+        const body = { host: server.ip, port: server.port || '22', username: server.username };
+        if (creds.password) body.password = creds.password;
+        if (creds.privateKey) body.privateKey = creds.privateKey;
+        fetch('/api/ssh/connect', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body)
+        })
+          .then(r => r.json())
+          .then(data => {
+            if (data.error) { retry('SSH reconnect failed: ' + data.error); return; }
+            sessionId = data.sessionId;
+            if (this._sessions) this._sessions[server.id] = { sessionId: data.sessionId, connected: true };
+            term.writeln('\r\n\x1b[32mSSH session re-established\x1b[0m');
+            initWs();
+          })
+          .catch(err => retry('SSH reconnect error: ' + err.message));
       };
 
       ws.onclose = (evt) => {
+        console.log('SSH WS closed: code=' + evt.code + ' reason="' + evt.reason + '" wasClean=' + evt.wasClean + ' errored=' + wsErrored);
         if (closed) return;
         const reason = evt.reason ? ' (' + evt.reason + ')' : '';
-        term.writeln('\r\n\x1b[33mConnection closed (code ' + evt.code + ')' + reason + '\x1b[0m');
+        if (wsErrored && reason) {
+          term.writeln('\r\n\x1b[31m' + UI.escHtml(evt.reason) + '\x1b[0m');
+        } else if (wsErrored) {
+          term.writeln('\r\n\x1b[31mConnection failed\x1b[0m');
+        }
+        term.writeln('\r\n\x1b[33mSession ended (code ' + evt.code + ')' + reason + '\x1b[0m');
         statusDot.className = 'status-dot';
+        if (evt.code === 4002) return;
+        if (evt.code === 4001 || evt.code === 1006 || !evt.wasClean) {
+          tryReconnectSSH();
+          return;
+        }
+        if (reconnectAttempt >= 5) return;
         const delay = Math.min(1000 * Math.pow(2, reconnectAttempt), maxReconnectDelay);
         reconnectAttempt++;
         setTimeout(initWs, delay);
@@ -346,23 +426,6 @@ const Servers = {
     });
 
     /* ── Minimize / Restore ── */
-
-    const floatEl = document.getElementById('terminal-floating');
-    const floatName = document.getElementById('tf-name');
-    const floatStatus = document.getElementById('tf-status');
-    const floatClose = document.getElementById('tf-close');
-    const modalEl = document.getElementById('modal');
-    const modalCloseBtn = document.getElementById('modal-close');
-
-    const showFloatingWidget = () => {
-      floatName.textContent = server.name;
-      floatStatus.className = 'status-dot' + (ws && ws.readyState === WebSocket.OPEN ? ' connected' : '');
-      floatEl.style.display = 'flex';
-    };
-
-    const hideFloatingWidget = () => {
-      floatEl.style.display = 'none';
-    };
 
     const minimizeTerminal = () => {
       if (closed || minimized) return;
@@ -440,6 +503,8 @@ const Servers = {
       document.addEventListener('mousemove', onMove);
       document.addEventListener('mouseup', onUp);
     });
+
+    /* ── No docker tab ── */
   },
 
   form(id) {

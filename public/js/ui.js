@@ -7,11 +7,12 @@ const UI = {
     this.confirmOverlay = document.getElementById('confirm-overlay');
     this.confirmBody = document.getElementById('confirm-body');
 
-    document.getElementById('modal-close').addEventListener('click', () => this.hideModal());
-    this.modal.addEventListener('click', (e) => {
+    const modalClose = document.getElementById('modal-close');
+    if (modalClose) modalClose.addEventListener('click', () => this.hideModal());
+    if (this.modal) this.modal.addEventListener('click', (e) => {
       if (e.target === this.modal) this.hideModal();
     });
-    this.confirmOverlay.addEventListener('click', (e) => {
+    if (this.confirmOverlay) this.confirmOverlay.addEventListener('click', (e) => {
       if (e.target === this.confirmOverlay) this.hideConfirm();
     });
   },
@@ -58,10 +59,12 @@ const UI = {
   },
 
   showConfirm(msg, onYes) {
+    if (!this.confirmBody) { console.error('UI: confirm body missing'); return; }
     this.confirmBody.textContent = msg;
     this.confirmOverlay.classList.add('show');
     const yes = this.confirmOverlay.querySelector('.confirm-yes');
     const no = this.confirmOverlay.querySelector('.confirm-no');
+    if (!yes || !no) { console.error('UI: confirm buttons missing'); return; }
     const cleanup = () => {
       this.confirmOverlay.classList.remove('show');
       yes.removeEventListener('click', handler);
@@ -105,10 +108,21 @@ const UI = {
     el.innerHTML = '<div class="empty-state"><div class="dsc-spinner" style="width:24px;height:24px;margin:0 auto 12px"></div><p>' + this.escHtml(text) + '</p></div>';
   },
 
-  skeleton(type) {
+  skeleton(type, count) {
+    count = count || 1;
     if (type === 'stat') return '<div class="skeleton skeleton-stat"></div>';
     if (type === 'card') return '<div class="skeleton skeleton-card"></div>';
-    return '<div class="skeleton skeleton-line"></div>';
+    if (type === 'table-row') return '<div class="skeleton skeleton-table-row"><div class="skeleton-line w-40"></div><div class="skeleton-line w-75"></div><div class="skeleton-line w-50"></div><div class="skeleton-line w-25"></div></div>';
+    if (type === 'docker-body') return '<div class="skeleton skeleton-docker-toolbar"></div><div class="skeleton skeleton-dashboard">' + new Array(count).fill('<div class="skeleton skeleton-table-row"></div>').join('') + '</div>';
+    if (type === 'server-card-body') return '<div class="skeleton skeleton-line w-75"></div><div class="skeleton skeleton-line w-50"></div>';
+    let out = '';
+    for (let i = 0; i < count; i++) out += '<div class="skeleton skeleton-line"></div>';
+    return out;
+  },
+
+  showSkeleton(el, type, count) {
+    count = count || 1;
+    el.innerHTML = '<div class="skeleton-container">' + this.skeleton(type, count) + '</div>';
   },
 
   escHtml(str) {

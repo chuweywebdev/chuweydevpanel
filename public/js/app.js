@@ -9,6 +9,7 @@ const App = {
     this._setupSidebar();
     this._setupKeyboard();
     this._setupMobileMenu();
+    this._setupAutoUpdater();
 
     this.navigate(this._getRoute());
   },
@@ -32,12 +33,12 @@ const App = {
 
   _render(route) {
     document.querySelectorAll('.nav-item').forEach(el => { el.classList.remove('active'); el.removeAttribute('aria-current'); });
-    const validRoutes = ['dashboard', 'servers', 'snippets', 'settings', 'backup'];
+    const validRoutes = ['dashboard', 'servers', 'snippets', 'settings', 'backup', 'docker'];
     if (!validRoutes.includes(route)) route = 'servers';
     const activeLink = document.querySelector('.nav-item[data-route="' + route + '"]');
     if (activeLink) { activeLink.classList.add('active'); activeLink.setAttribute('aria-current', 'page'); }
 
-    const titles = { dashboard: 'Dashboard', servers: 'Servers', snippets: 'Snippets', settings: 'Settings', backup: 'Cloud Backup' };
+    const titles = { dashboard: 'Dashboard', servers: 'Servers', snippets: 'Snippets', settings: 'Settings', backup: 'Cloud Backup', docker: 'Docker' };
     const pageTitle = document.getElementById('page-title');
     if (pageTitle) pageTitle.textContent = titles[route] || 'ChuweyDevPanel';
 
@@ -56,6 +57,7 @@ const App = {
         case 'snippets': Snippets.render(); break;
         case 'settings': Settings.render(); break;
         case 'backup': Backup.render(); break;
+        case 'docker': Docker.render(); break;
         default: Servers.render();
       }
     } catch (err) {
@@ -77,7 +79,8 @@ const App = {
   },
 
   _setupKeyboard() {
-    document.getElementById('tour-btn').addEventListener('click', () => TourGuide.start());
+    const tourBtn = document.getElementById('tour-btn');
+    if (tourBtn) tourBtn.addEventListener('click', () => TourGuide.start());
     const sidebar = document.getElementById('sidebar');
     if (sidebar) {
       sidebar.addEventListener('keydown', (e) => {
@@ -138,6 +141,69 @@ const App = {
       if (backdrop) backdrop.classList.remove('show');
       document.body.style.overflow = '';
     }
+  },
+
+  _setupAutoUpdater() {
+    if (!window.electronAPI) return;
+
+    const banner = document.getElementById('update-banner');
+    const message = document.getElementById('update-message');
+    const actions = document.getElementById('update-banner-actions');
+    const downloadBtn = document.getElementById('update-download-btn');
+    const installBtn = document.getElementById('update-install-btn');
+    const dismissBtn = document.getElementById('update-dismiss-btn');
+    if (!banner || !message || !actions || !downloadBtn || !installBtn || !dismissBtn) return;
+
+    let updateVersion = '';
+
+    window.electronAPI.on('checking-for-update', () => {
+      message.textContent = 'Checking for updates...';
+      banner.style.display = 'flex';
+      actions.style.display = 'none';
+    });
+
+    window.electronAPI.on('update-available', (info) => {
+      updateVersion = info.version;
+      message.textContent = 'Update v' + updateVersion + ' is available';
+      banner.style.display = 'flex';
+      actions.style.display = 'flex';
+      downloadBtn.style.display = 'inline-flex';
+      installBtn.style.display = 'none';
+    });
+
+    window.electronAPI.on('update-not-available', () => {
+      banner.style.display = 'none';
+    });
+
+    window.electronAPI.on('update-error', () => {
+      banner.style.display = 'none';
+    });
+
+    window.electronAPI.on('update-download-progress', (progress) => {
+      const pct = Math.round(progress.percent);
+      message.textContent = 'Downloading update... ' + pct + '%';
+      downloadBtn.style.display = 'none';
+      installBtn.style.display = 'none';
+    });
+
+    window.electronAPI.on('update-downloaded', () => {
+      message.textContent = 'v' + updateVersion + ' downloaded. Install now?';
+      downloadBtn.style.display = 'none';
+      installBtn.style.display = 'inline-flex';
+      actions.style.display = 'flex';
+    });
+
+    downloadBtn.addEventListener('click', () => {
+      window.electronAPI.invoke('download-update');
+    });
+
+    installBtn.addEventListener('click', () => {
+      window.electronAPI.invoke('quit-and-install');
+    });
+
+    dismissBtn.addEventListener('click', () => {
+      banner.style.display = 'none';
+    });
   },
 
   updateStats() {
